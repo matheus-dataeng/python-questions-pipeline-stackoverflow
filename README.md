@@ -77,7 +77,7 @@ bridge_tags     → relacionamento entre perguntas e tags
 ### Pré-requisitos
 
 - Python 3.10+
-- PostgreSQL rodando localmente ou em rede
+- PostgreSQL 
 
 ### 1. Clone o repositório
 
@@ -117,7 +117,7 @@ DB_USER=postgres
 PASSWORD=sua_senha
 HOST=localhost
 PORT=5432
-DBNAME=stackoverflow_dw
+DBNAME=nome_banco
 
 # Tabelas
 TABLE_DIM_USUARIOS=dim_usuario
@@ -177,7 +177,7 @@ uvicorn app.main:app --reload
 | GET | `/metricas/por-ano` | Volume de perguntas por ano |
 | GET | `/metricas/por-tag` | Contagem de perguntas agrupada por tag |
 
-A documentação interativa da API está disponível em `http://localhost:8000/docs` após subir o servidor.
+A documentação interativa da API está disponível em `http://localhost:8000/docs` após subir a aplicação.
 
 ---
 
