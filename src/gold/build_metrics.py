@@ -86,7 +86,6 @@ def perguntas(df: pd.DataFrame) -> pd.DataFrame:
         "titulo",
         "licenca_conteudo"
     ]
-    
     df_perguntas = df[colunas_perguntas].drop_duplicates().reset_index(drop=True)
     
     logger.info(f"Criação dim_perguntas / Colunas: {df_perguntas.shape[1]}, Linhas: {len(df_perguntas)}")
@@ -156,7 +155,7 @@ def build_metrics(df:pd.DataFrame) -> dict[str, pd.DataFrame]:
         "bridge_tags" : df_bridge
     }
 
-def salvar_datalake(df:pd.DataFrame, nome_tabela:str) -> None:
+def salvar_datalake(nome_tabela:str, df:pd.DataFrame ) -> None:
 
     path = Path(f"data_lake/gold/{nome_tabela}.parquet")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -173,7 +172,7 @@ def load_gold_datalake(tabelas: dict[str, pd.DataFrame]) -> None:
     
     try:
         for nome_tabela, df_tabela in tabelas.items():
-                salvar_datalake(df_tabela, nome_tabela)
+                salvar_datalake(nome_tabela, df_tabela)
                 
         logger.info("Carga finalizada")
         

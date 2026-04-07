@@ -22,6 +22,10 @@ freeze:
 run-pipeline:
 	$(PYTHON) src/main.py
 
+# Rodar API
+run-api:
+	$(UVICORN) app.main:app --reload --port 8000
+
 # Remove arquivos temporários do Python
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
