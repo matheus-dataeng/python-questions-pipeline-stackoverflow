@@ -2,6 +2,7 @@ import pandas as pd
 import logging as log
 import html
 from pathlib import Path
+from src.s3_loader import upload_s3
 
 logger = log.getLogger(__name__)
 
@@ -60,8 +61,8 @@ def columns(df: pd.DataFrame) -> pd.DataFrame:
         
         return df 
     
-    except Exception as erro:
-        logger.error(f"Erro ao transformar colunas: {erro}")
+    except Exception as e:
+        logger.error(f"Erro ao transformar colunas: {e}")
         raise
 
 def validate_data(df: pd.DataFrame) -> pd.DataFrame:
@@ -81,20 +82,20 @@ def validate_data(df: pd.DataFrame) -> pd.DataFrame:
                 if null_dates:
                     logger.warning(f"{columns_date} invalido: {null_dates}")
              
-        numeric_types = ["quantidade_visualizacoes", "quantidade_respostas", "pontuacao", "reputacao_usuario"]
+        numeric_cols = ["quantidade_visualizacoes", "quantidade_respostas", "pontuacao", "reputacao_usuario"]
         
-        for cols_numeric in numeric_types:
-            if cols_numeric in df.columns:
-                df[cols_numeric] = pd.to_numeric(df[cols_numeric], errors= "coerce")
+        for columns_numeric in numeric_cols:
+            if columns_numeric in df.columns:
+                df[columns_numeric] = pd.to_numeric(df[columns_numeric], errors= "coerce")
             
-                null_numerics = int(df[cols_numeric].isna().sum())
-                zero_numerics = int((df[cols_numeric]==0).sum())
+                null_numerics = int(df[columns_numeric].isna().sum())
+                zero_numerics = int((df[columns_numeric]==0).sum())
             
                 if null_numerics:
-                    logger.warning(f"{cols_numeric} invalidos: {null_numerics}")
+                    logger.warning(f"{columns_numeric} invalidos: {null_numerics}")
                 
                 if zero_numerics:
-                    logger.warning(f"{cols_numeric} zerados: {zero_numerics}")
+                    logger.warning(f"{columns_numeric} zerados: {zero_numerics}")
                     
         cols_str = ["titulo", "nome_usuario", "tipo_usuario"] 
         
@@ -121,8 +122,8 @@ def validate_data(df: pd.DataFrame) -> pd.DataFrame:
         
         return df 
             
-    except Exception as erro:
-        logger.error(f"Erro na validação dos dados: {erro}")
+    except Exception as e:
+        logger.error(f"Erro na validação dos dados: {e}")
         raise 
 
 def transform(df:pd.DataFrame) -> pd.DataFrame:
@@ -143,8 +144,9 @@ def load_silver_datalake(df:pd.DataFrame) -> None:
     
     try:
         df.to_parquet(silver_path, index= False)
+        upload_s3(silver_path, "silver/analise_dificuldade_programacao_tratado.parquet")
         logger.info("Carga realizada no data lake silver")
     
-    except Exception as erro:
-        logger.error(f"Erro ao carrega no data lake silver: {erro}")
+    except Exception as e:
+        logger.error(f"Erro ao carrega no data lake silver: {e}")
         raise 

@@ -4,7 +4,7 @@ import logging as log
 from pathlib import Path
 import os 
 from dotenv import load_dotenv 
-
+from src.s3_loader import upload_s3
 
 logger = log.getLogger(__name__)
 load_dotenv()
@@ -53,7 +53,8 @@ def load_bronze_datalake(df: pd.DataFrame) -> None:
     bronze_path.parent.mkdir(parents=True, exist_ok=True)
     
     try:
-        df.to_parquet(bronze_path, index=False)
+        df.to_parquet(bronze_path, index=False) 
+        upload_s3(bronze_path, "bronze/analise_dificuldade_programacao_bruto.parquet") 
         logger.info("Carga realizada no data lake bronze")
     
     except Exception as erro:

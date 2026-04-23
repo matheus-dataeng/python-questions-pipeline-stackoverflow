@@ -7,3 +7,5 @@ uvicorn
 pathlib
 pyarrow
 psycopg2-binary
+pytest 
+boto3

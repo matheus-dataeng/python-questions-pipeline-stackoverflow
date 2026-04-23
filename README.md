@@ -1,21 +1,25 @@
 # 🐍 Python Stack Overflow — Analytics Pipeline
 
-Pipeline ETL que coleta perguntas sobre Python do Stack Overflow, processa os dados em um data lake com arquitetura bronze/silver/gold e carrega um modelo estrela no PostgreSQL para análise via API REST.
+Pipeline ETL completo que coleta perguntas sobre Python do Stack Overflow, processa os dados em um data lake com arquitetura Medallion (Bronze/Silver/Gold), armazena em AWS S3, carrega um modelo estrela no PostgreSQL e expõe os dados via API REST — com orquestração via Apache Airflow e containerização com Docker.
 
 ---
 
 ## 🏗️ Arquitetura
 
+![Arquitetura do Pipeline](docs/arquitetura_pipeline.png)
+
 ```
 Stack Overflow API
        ↓
-  [ Bronze ]  →  dado bruto em Parquet
+  [ Bronze ]  →  dado bruto em Parquet + AWS S3
        ↓
-  [ Silver ]  →  dado limpo e tratado em Parquet
+  [ Silver ]  →  dado limpo e tratado em Parquet + AWS S3
        ↓
-  [ Gold ]    →  star schema em Parquet + PostgreSQL
+  [ Gold ]    →  star schema em Parquet + AWS S3 + PostgreSQL
        ↓
-  [ FastAPI ] →  endpoints REST para consumo
+  [ FastAPI ] →  endpoints REST para consumo dos dados
+       ↓
+  [ Airflow ] →  orquestração de todo o pipeline via DAGs
 ```
 
 ---
@@ -25,32 +29,37 @@ Stack Overflow API
 ```
 ├── app/
 │   ├── db/
-│   │   └── database.py         # Conexão com o banco
+│   │   └── database.py             # Conexão com o banco
 │   ├── routers/
-│   │   ├── perguntas.py        # Rotas de perguntas
-│   │   ├── tags.py             # Rotas de tags
-│   │   ├── usuarios.py         # Rotas de usuários
-│   │   └── metricas.py         # Rotas de métricas
-│   ├── dependencies.py         # Injeção de dependência (get_db)
-│   └── main.py                 # Inicialização da API
+│   │   ├── perguntas.py            # Rotas de perguntas
+│   │   ├── tags.py                 # Rotas de tags
+│   │   ├── usuarios.py             # Rotas de usuários
+│   │   └── metricas.py             # Rotas de métricas
+│   ├── dependencies.py             # Injeção de dependência (get_db)
+│   └── main.py                     # Inicialização da API
 ├── src/
 │   ├── bronze/
-│   │   └── extract.py          # Extração da API e carga bronze
+│   │   └── extract.py              # Extração da API, carga bronze e upload S3
 │   ├── silver/
-│   │   └── transform.py        # Transformação e carga silver
+│   │   └── transform.py            # Transformação, carga silver e upload S3
 │   ├── gold/
-│   │   ├── build_metrics.py    # Modelagem dimensional e carga gold
-│   │   └── load.py             # Carga no PostgreSQL
+│   │   ├── build_metrics.py        # Modelagem dimensional, carga gold e upload S3
+│   │   └── load.py                 # Carga no PostgreSQL (DELETE + INSERT idempotente)
 │   ├── utils/
-│   │   └── logger_config.py    # Configuração de logs
-│   └── main.py                 # Orquestrador do pipeline
+│   │   └── s3_loader.py            # Utilitário de upload para AWS S3
+│   └── main.py                     # Orquestrador local do pipeline
+├── dags/
+│   └── run_pipeline.py             # DAG do Airflow com tasks e dependências
 ├── sql/
-│   └── script_tabelas.sql      # DDL das tabelas no PostgreSQL
+│   └── script_tabelas.sql          # DDL das tabelas no PostgreSQL
 ├── data_lake/
-│   ├── bronze/
-│   ├── silver/
-│   └── gold/
-├── .env.example
+│   ├── bronze/                     # Parquet bruto
+│   ├── silver/                     # Parquet tratado
+│   └── gold/                       # Parquet modelado
+├── docker-compose.yml              # Orquestração dos containers
+├── Dockerfile                      # Imagem da API
+├── Dockerfile.airflow              # Imagem do Airflow com dependências do projeto
+├── .env.example                    # Exemplo de variáveis de ambiente
 ├── requirements.txt
 └── Makefile
 ```
@@ -59,65 +68,56 @@ Stack Overflow API
 
 ## 🗃️ Modelagem do Banco
 
-Modelo estrela com bridge table para relação muitos-para-muitos entre perguntas e tags.
+Modelo estrela com bridge table para resolver a relação muitos-para-muitos entre perguntas e tags.
 
 ```
 dim_usuario     → dados do usuário que fez a pergunta
-dim_tempo       → data e hora da pergunta
+dim_tempo       → data e hora da pergunta (ano, mês, dia, hora, dia da semana)
 dim_tags        → tecnologias relacionadas à pergunta
 dim_perguntas   → título e licença da pergunta
-fato_perguntas  → métricas: visualizações, respostas, pontuação
-bridge_tags     → relacionamento entre perguntas e tags
+fato_perguntas  → métricas: visualizações, respostas, pontuação, respondida
+bridge_tags     → relacionamento N:N entre perguntas e tags
 ```
 
 ---
 
 ## 🚀 Como Rodar o Projeto
 
-### Pré-requisitos
+### Opção 1 — Docker (recomendado)
 
-- Python 3.10+
-- PostgreSQL 
+#### Pré-requisitos
 
-### 1. Clone o repositório
+- Docker e Docker Compose instalados
+
+#### 1. Clone o repositório
 
 ```bash
-git clone https://github.com/seu-usuario/stackoverflow-analytics-pipeline
+git clone https://github.com/matheus-dataeng/stackoverflow-analytics-pipeline
 cd stackoverflow-analytics-pipeline
 ```
 
-### 2. Crie e ative o ambiente virtual
+#### 2. Configure o `.env.docker`
 
 ```bash
-python -m venv venv
-source venv/bin/activate        # Linux/Mac
-venv\Scripts\activate           # Windows
+cp .env.example .env.docker
 ```
 
-### 3. Instale as dependências
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure o `.env`
-
-```bash
-cp .env.example .env
-```
-
-Preencha o `.env` com suas credenciais:
+Preencha com suas credenciais:
 
 ```dotenv
 # URL da API
 API_URL=https://api.stackexchange.com/2.3/questions/unanswered?order=desc&sort=activity&tagged=python&site=stackoverflow
 
-# Credenciais do banco
+# Banco de dados
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=sua_senha
+POSTGRES_DB=stackoverflow_dw
+
 DB_USER=postgres
-PASSWORD=sua_senha
-HOST=localhost
-PORT=5432
-DBNAME=nome_banco
+DB_PASSWORD=sua_senha
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=stackoverflow_dw
 
 # Tabelas
 TABLE_DIM_USUARIOS=dim_usuario
@@ -126,23 +126,96 @@ TABLE_DIM_TAGS=dim_tags
 TABLE_DIM_PERGUNTAS=dim_perguntas
 TABLE_FATO_PERGUNTAS=fato_perguntas
 TABLE_BRIDGE_TAGS=bridge_tags
+
+# Airflow
+AIRFLOW__CORE__EXECUTOR=LocalExecutor
+AIRFLOW__CORE__FERNET_KEY=sua_fernet_key
+AIRFLOW__CORE__LOAD_EXAMPLES=false
+AIRFLOW__WEBSERVER__SECRET_KEY=sua_secret_key
+
+# AWS S3
+AWS_ACCESS_KEY_ID=sua_chave
+AWS_SECRET_ACCESS_KEY=sua_chave_secreta
+AWS_DEFAULT_REGION=us-east-1
+BUCKET=nome_do_seu_bucket
 ```
 
-### 5. Crie as tabelas no banco
+#### 3. Suba os containers
 
-Execute o script SQL no seu PostgreSQL:
+```bash
+docker-compose up --build
+```
+
+Isso sobe 4 containers: **PostgreSQL**, **Airflow Webserver**, **Airflow Scheduler** e **API**.
+
+#### 4. Crie os bancos no PostgreSQL
+
+Conecte via PgAdmin ou psql em `localhost:5435` e crie os bancos:
+
+```sql
+CREATE DATABASE airflow;
+CREATE DATABASE stackoverflow_dw;
+```
+
+#### 5. Crie as tabelas
+
+Execute o script no banco `stackoverflow_dw`:
+
+```bash
+psql -h localhost -p 5435 -U postgres -d stackoverflow_dw -f sql/script_tabelas.sql
+```
+
+#### 6. Execute o pipeline via Airflow
+
+Acesse `http://localhost:8080` com as credenciais `admin / admin`, localize a DAG `Pipeline_StackOverFlow` e dispare manualmente.
+
+#### 7. Acesse a API
+
+```
+http://localhost:8000/docs
+```
+
+---
+
+### Opção 2 — Local (sem Docker)
+
+#### Pré-requisitos
+
+- Python 3.10+
+- PostgreSQL instalado localmente
+
+#### 1. Clone e configure o ambiente
+
+```bash
+git clone https://github.com/matheus-dataeng/stackoverflow-analytics-pipeline
+cd stackoverflow-analytics-pipeline
+python -m venv venv
+source venv/bin/activate        # Linux/Mac
+venv\Scripts\activate           # Windows
+pip install -r requirements.txt
+```
+
+#### 2. Configure o `.env`
+
+```bash
+cp .env.example .env
+```
+
+Preencha com suas credenciais locais.
+
+#### 3. Crie as tabelas no banco
 
 ```bash
 psql -h localhost -U postgres -d stackoverflow_dw -f sql/script_tabelas.sql
 ```
 
-### 6. Rode o pipeline
+#### 4. Rode o pipeline
 
 ```bash
 python src/main.py
 ```
 
-### 7. Suba a API
+#### 5. Suba a API
 
 ```bash
 uvicorn app.main:app --reload
@@ -177,32 +250,30 @@ uvicorn app.main:app --reload
 | GET | `/metricas/por-ano` | Volume de perguntas por ano |
 | GET | `/metricas/por-tag` | Contagem de perguntas agrupada por tag |
 
-A documentação interativa da API está disponível em `http://localhost:8000/docs` após subir a aplicação.
+Documentação interativa disponível em `http://localhost:8000/docs`.
 
 ---
 
 ## 🛠️ Stack
 
-- **Python** — linguagem principal
-- **Pandas** — transformação dos dados
-- **FastAPI** — API REST
-- **SQLAlchemy** — ORM e conexão com banco
-- **PostgreSQL** — banco de dados
-- **Parquet** — armazenamento em cada camada do data lake
-- **python-dotenv** — gerenciamento de variáveis de ambiente
+| Tecnologia | Uso |
+|---|---|
+| **Python** | Linguagem principal |
+| **Pandas** | Transformação e modelagem dos dados |
+| **FastAPI** | API REST com documentação automática |
+| **SQLAlchemy** | ORM e conexão com PostgreSQL |
+| **PostgreSQL** | Data Warehouse relacional |
+| **Apache Airflow** | Orquestração do pipeline via DAGs |
+| **Docker / Docker Compose** | Containerização de todos os serviços |
+| **AWS S3** | Armazenamento das camadas do data lake |
+| **Parquet** | Formato de armazenamento em cada camada |
+| **python-dotenv** | Gerenciamento de variáveis de ambiente |
 
 ---
 
 ## 🔮 Próximos Passos
 
-- [ ] Migrar data lake local para **AWS S3**
-- [ ] Migrar banco para **AWS RDS**
-- [ ] Deploy da API com **AWS API Gateway**
-- [ ] Orquestrar pipeline com **Apache Airflow**
-- [ ] Frontend para consumo da API
+- [ ] Cobertura de testes com **pytest** nas funções de transformação
+- [ ] Deploy da API em **AWS** (RDS + API Gateway)
+- [ ] Frontend para consumo e visualização dos dados
 
----
-
-## 👥 Autores
-
-Desenvolvido por **Matheus Meneses** e **Gabriel Sena**.

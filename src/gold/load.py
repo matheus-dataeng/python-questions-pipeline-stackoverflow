@@ -18,10 +18,10 @@ def load(
 ) -> None:
     
     user = os.getenv("DB_USER")
-    password = os.getenv("PASSWORD")
-    host = os.getenv("HOST")
-    port = os.getenv("PORT")
-    dbname = os.getenv("DBNAME")
+    password = os.getenv("DB_PASSWORD")
+    host = os.getenv("DB_HOST")
+    port = os.getenv("DB_PORT")
+    dbname = os.getenv("DB_NAME")
     
     if not all([user, password, host, port, dbname]):
         logger.error("Variaveis não definidas no .env")

@@ -1,6 +1,8 @@
 import pandas as pd
 import logging as log 
 from pathlib import Path
+from typing import Dict
+from src.s3_loader import upload_s3
 
 logger = log.getLogger(__name__)
 
@@ -131,7 +133,7 @@ def fato(
     logger.info(f"Criação fato_perguntas / Colunas: {fato_perguntas.shape[1]}, Linhas: {len(fato_perguntas)}")
     return fato_perguntas
 
-def build_metrics(df:pd.DataFrame) -> dict[str, pd.DataFrame]:
+def build_metrics(df:pd.DataFrame) -> Dict[str, pd.DataFrame]:
     logger.info("Iniciando criação das metricas")
     
     df_usuarios = usuario(df)
@@ -157,17 +159,18 @@ def build_metrics(df:pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 def salvar_datalake(nome_tabela:str, df:pd.DataFrame ) -> None:
 
-    path = Path(f"data_lake/gold/{nome_tabela}.parquet")
-    path.parent.mkdir(parents=True, exist_ok=True)
+    gold_path = Path(f"data_lake/gold/{nome_tabela}.parquet")
+    gold_path.parent.mkdir(parents=True, exist_ok=True)
     
     try:
-        df.to_parquet(path, index=False)
-        logger.info(f"{nome_tabela} salva em {path}")
+        df.to_parquet(gold_path, index=False)
+        upload_s3(gold_path, f"gold/{nome_tabela}.parquet")
+        logger.info(f"{nome_tabela} salva em {gold_path}")
     
     except Exception as e:
         logger.error(f"Erro ao salvar {nome_tabela}: {e}")
 
-def load_gold_datalake(tabelas: dict[str, pd.DataFrame]) -> None:
+def load_gold_datalake(tabelas: Dict[str, pd.DataFrame]) -> None:
     logger.info("Iniciando carga no data lake gold")
     
     try:
