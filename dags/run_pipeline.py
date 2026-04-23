@@ -9,7 +9,7 @@ from src.silver.transform import transform, load_silver_datalake
 from src.silver.transform import upload_s3 as upload_s3_silver
 from src.gold.build_metrics import build_metrics, load_gold_datalake
 from src.gold.build_metrics import upload_s3 as upload_s3_gold
-from src.gold.load import load as load_dw_func
+from src.gold.load import load as load_dw
 
 BRONZE_PATH = "/opt/airflow/data_lake/bronze/analise_dificuldade_programacao_bruto.parquet"
 SILVER_PATH = "/opt/airflow/data_lake/silver/analise_dificuldade_programacao_tratado.parquet"
@@ -48,7 +48,7 @@ def task_load_dw():
     fato_perguntas = pd.read_parquet(f"{GOLD_PATH}/fato_perguntas.parquet")
     df_bridge = pd.read_parquet(f"{GOLD_PATH}/bridge_tags.parquet")
     
-    load_dw_func(
+    load_dw(
         df_usuarios, 
         df_tempo, 
         df_tags, 
