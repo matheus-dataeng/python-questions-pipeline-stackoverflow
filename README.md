@@ -6,7 +6,7 @@ Pipeline ETL completo que coleta perguntas sobre Python do Stack Overflow, proce
 
 ## 🏗️ Arquitetura
 
-![Arquitetura do Pipeline](docs/arquitetura_pipeline.png)
+![Arquitetura do Pipeline](assets/arquitetura_pipeline.png)
 
 ```
 Stack Overflow API
