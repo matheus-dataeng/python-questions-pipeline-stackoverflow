@@ -5,6 +5,5 @@ analise_programacaodata_lake/
 data_lake/
 __pycache__
 .pytest_cache
-tests/
 __init__.py
 .env.docker
